@@ -1,12 +1,14 @@
+
 (use-modules (ice-9 regex))
 
-(define raw-config "
-    daemon off;
+(define config "
     worker_rlimit_nofile 8192;
 
     events  { worker_connections  4096; }
 
     http {
+      include mime.types;
+
       server { 
         listen       8080;
         server_name  localhost;
@@ -20,11 +22,20 @@
         error_log    nginx-error.log;
 
         location / {
-          root    SERVE_PATH
+          root    SERVE_PATH;
         }
       }
     }
 ")
+
+(define mime-types
+  "types {
+  text/html                   html;
+  text/css                    css;
+  application/javascript      js;
+  application/wasm            wasm;
+  }"
+  )
 
 (define serve-path 
   (string-append (getcwd)))
@@ -38,19 +49,30 @@
 (define config-path 
   (string-append nginx-path "/nginx.config"))
 
+(define mime-path
+  (string-append nginx-path "/mime.types"))
+
 (when (not (file-exists? nginx-path))
   (mkdir nginx-path))
 
 (when (not (file-exists? log-path))
   (mkdir log-path))
 
-(define port (open-output-file config-path))
+(define mime-port (open-output-file mime-path))
+(display mime-types mime-port)
+
+(define config-port (open-output-file config-path))
 (define config 
   (regexp-substitute 
     #f 
-    (string-match "SERVE_PATH" raw-config) 
+    (string-match "SERVE_PATH" config) 
     'pre serve-path 'post))
 
-(display config port)
+(display config config-port)
 
-(system* "nginx" "-c" config-path "-p" nginx-path)
+(close-port mime-port)
+(close-port config-port)
+
+(system* "nginx" "-c" config-path  "-g" "daemon off;" "-p" nginx-path)
+
+
